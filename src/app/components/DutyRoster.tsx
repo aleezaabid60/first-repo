@@ -1,29 +1,60 @@
 'use client';
 
-import { useState } from 'react';
-import { Calendar, Sparkles, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-
-const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const staffMembers = [
-  'Dr. Sarah Khan',
-  'Prof. Ahmed Ali',
-  'Dr. Fatima Noor',
-  'Ms. Ayesha Malik',
-  'Dr. Hina Shah',
-  'Prof. Zainab Raza',
-];
-
-const mockRoster = [
-  { day: 'Monday', staff: ['Dr. Sarah Khan', 'Prof. Ahmed Ali'], shift: 'Morning', conflict: false },
-  { day: 'Tuesday', staff: ['Dr. Fatima Noor', 'Ms. Ayesha Malik'], shift: 'Afternoon', conflict: true },
-  { day: 'Wednesday', staff: ['Dr. Hina Shah', 'Prof. Zainab Raza'], shift: 'Morning', conflict: false },
-  { day: 'Thursday', staff: ['Dr. Sarah Khan', 'Dr. Fatima Noor'], shift: 'Full Day', conflict: false },
-  { day: 'Friday', staff: ['Prof. Ahmed Ali', 'Ms. Ayesha Malik'], shift: 'Morning', conflict: false },
-  { day: 'Saturday', staff: ['Dr. Hina Shah'], shift: 'Morning', conflict: false },
-];
+import { useState, useEffect } from 'react';
+import { Calendar, Sparkles, ChevronLeft, ChevronRight, Plus, Loader2, User } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 
 export default function DutyRoster() {
-  const [selectedWeek, setSelectedWeek] = useState('Week 3 - April 2026');
+  const [duties, setDuties] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+
+  useEffect(() => {
+    fetchData();
+  }, [currentWeekStart]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const { data: dutiesData, error: dutiesError } = await supabase
+        .from('duties')
+        .select(`
+          *,
+          teachers (first_name, last_name)
+        `);
+
+      if (dutiesError) throw dutiesError;
+
+      const { data: staffData, error: staffError } = await supabase
+        .from('teachers')
+        .select('*');
+
+      if (staffError) throw staffError;
+
+      setDuties(dutiesData || []);
+      setStaff(staffData || []);
+    } catch (error) {
+      console.error('Error fetching duty roster:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const weekDays = Array.from({ length: 6 }).map((_, i) => addDays(currentWeekStart, i));
+
+  const getDutiesForDay = (day: Date) => {
+    return duties.filter(d => isSameDay(new Date(d.duty_date), day));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6">
@@ -40,14 +71,22 @@ export default function DutyRoster() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+          <button 
+            onClick={() => setCurrentWeekStart(addDays(currentWeekStart, -7))}
+            className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+          >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>
           <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10">
             <Calendar className="w-4 h-4 text-primary" />
-            <span className="font-medium text-foreground">{selectedWeek}</span>
+            <span className="font-medium text-foreground">
+              {format(currentWeekStart, 'MMM d')} - {format(addDays(currentWeekStart, 5), 'MMM d, yyyy')}
+            </span>
           </div>
-          <button className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+          <button 
+            onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))}
+            className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+          >
             <ChevronRight className="w-5 h-5 text-foreground" />
           </button>
         </div>
@@ -60,43 +99,45 @@ export default function DutyRoster() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 rounded-2xl border p-6 backdrop-blur-xl overflow-hidden" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
           <div className="space-y-4">
-            {mockRoster.map((entry, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-xl border transition-all hover:border-primary/50 cursor-pointer"
-                style={{
-                  background: entry.conflict ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.03)',
-                  borderColor: entry.conflict ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.1)',
-                  boxShadow: entry.conflict ? '0 0 20px rgba(239, 68, 68, 0.2)' : 'none',
-                }}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h4 className="font-semibold text-foreground">{entry.day}</h4>
-                      <span className="px-2 py-1 text-xs rounded-lg bg-primary/20 text-primary font-medium">
-                        {entry.shift}
-                      </span>
-                      {entry.conflict && (
-                        <span className="px-2 py-1 text-xs rounded-lg bg-destructive/20 text-destructive font-medium animate-pulse">
-                          Conflict Detected
+            {weekDays.map((day, idx) => {
+              const dayDuties = getDutiesForDay(day);
+              return (
+                <div
+                  key={idx}
+                  className="p-4 rounded-xl border transition-all hover:border-primary/50 cursor-pointer bg-white/3 border-white/10"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="font-semibold text-foreground">{format(day, 'EEEE')}</h4>
+                        <span className="text-xs text-muted-foreground">{format(day, 'MMM d')}</span>
+                        <span className="px-2 py-1 text-xs rounded-lg bg-primary/20 text-primary font-medium">
+                          {dayDuties.length} Assigned
                         </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {entry.staff.map((person, i) => (
-                        <div
-                          key={i}
-                          className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm text-foreground"
-                        >
-                          {person}
-                        </div>
-                      ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {dayDuties.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No duties assigned</p>
+                        ) : (
+                          dayDuties.map((duty, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm text-foreground"
+                            >
+                              <User className="w-3 h-3 text-primary" />
+                              {duty.teachers.first_name} {duty.teachers.last_name}
+                              <span className="text-[10px] text-muted-foreground ml-1">
+                                {duty.start_time.slice(0, 5)}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -111,8 +152,8 @@ export default function DutyRoster() {
               <div className="flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-sm text-foreground font-medium mb-1">Balance Tuesday Load</p>
-                  <p className="text-xs text-muted-foreground">Reduce conflicts by swapping Dr. Fatima with Dr. Hina</p>
+                  <p className="text-sm text-foreground font-medium mb-1">Balance Load</p>
+                  <p className="text-xs text-muted-foreground">Teacher distribution looks optimal for the current week.</p>
                 </div>
               </div>
             </div>
@@ -122,17 +163,7 @@ export default function DutyRoster() {
                 <Sparkles className="w-5 h-5 text-secondary mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-sm text-foreground font-medium mb-1">Weekend Coverage</p>
-                  <p className="text-xs text-muted-foreground">Add one more staff member for Saturday duties</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-chart-3/10 border border-chart-3/30">
-              <div className="flex items-start gap-3">
-                <Sparkles className="w-5 h-5 text-chart-3 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm text-foreground font-medium mb-1">Optimize Workload</p>
-                  <p className="text-xs text-muted-foreground">Current distribution is 92% optimal</p>
+                  <p className="text-xs text-muted-foreground">Saturday duties are currently light. Consider adding coverage.</p>
                 </div>
               </div>
             </div>
@@ -141,12 +172,12 @@ export default function DutyRoster() {
           <div className="pt-4 border-t border-white/10">
             <h4 className="text-sm font-semibold text-foreground mb-3">Available Staff</h4>
             <div className="space-y-2">
-              {staffMembers.map((staff, idx) => (
+              {staff.map((teacher) => (
                 <div
-                  key={idx}
+                  key={teacher.id}
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-all cursor-pointer"
                 >
-                  <span className="text-sm text-foreground">{staff}</span>
+                  <span className="text-sm text-foreground">{teacher.first_name} {teacher.last_name}</span>
                   <div className="w-2 h-2 rounded-full bg-chart-3" />
                 </div>
               ))}
@@ -157,3 +188,4 @@ export default function DutyRoster() {
     </div>
   );
 }
+

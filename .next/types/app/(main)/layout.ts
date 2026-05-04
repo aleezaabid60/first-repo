@@ -1,4 +1,4 @@
-// File: C:\Users\Hammad\Documents\github\fyp-project\src\app\(main)\layout.tsx
+// File: C:\Users\MASTER\OneDrive\Documents\GitHub\first-repo\src\app\(main)\layout.tsx
 import * as entry from '../../../../src/app/(main)/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

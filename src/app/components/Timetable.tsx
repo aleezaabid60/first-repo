@@ -1,26 +1,81 @@
 'use client';
 
-import { Clock, MapPin } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Clock, MapPin, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
-const timeSlots = ['8:00 AM', '9:30 AM', '11:00 AM', '12:30 PM', '2:00 PM', '3:30 PM'];
+const timeSlots = ['08:00:00', '09:30:00', '11:00:00', '12:30:00', '14:00:00', '15:30:00'];
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-const timetableData = [
-  { day: 'Monday', time: '8:00 AM', subject: 'Computer Science', room: 'Lab 101', status: 'occupied', color: '#4F9EFF' },
-  { day: 'Monday', time: '11:00 AM', subject: 'Mathematics', room: 'Room 203', status: 'occupied', color: '#B8A3E8' },
-  { day: 'Tuesday', time: '9:30 AM', subject: 'Physics', room: 'Lab 202', status: 'occupied', color: '#34D399' },
-  { day: 'Tuesday', time: '2:00 PM', subject: 'English', room: 'Room 105', status: 'occupied', color: '#FBBF24' },
-  { day: 'Wednesday', time: '8:00 AM', subject: 'Chemistry', room: 'Lab 303', status: 'occupied', color: '#F87171' },
-  { day: 'Wednesday', time: '12:30 PM', subject: 'Biology', room: 'Lab 201', status: 'occupied', color: '#4F9EFF' },
-  { day: 'Thursday', time: '9:30 AM', subject: 'Statistics', room: 'Room 401', status: 'occupied', color: '#B8A3E8' },
-  { day: 'Thursday', time: '3:30 PM', subject: 'Psychology', room: 'Room 302', status: 'occupied', color: '#34D399' },
-  { day: 'Friday', time: '8:00 AM', subject: 'Sociology', room: 'Room 201', status: 'occupied', color: '#FBBF24' },
-];
+// Helper to format time for display
+const formatTime = (time: string) => {
+  const [hours, minutes] = time.split(':');
+  const h = parseInt(hours);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const displayH = h % 12 || 12;
+  return `${displayH}:${minutes} ${ampm}`;
+};
 
 export default function Timetable() {
-  const getClassForSlot = (day: string, time: string) => {
-    return timetableData.find((item) => item.day === day && item.time === time);
+  const [timetable, setTimetable] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ occupied: 0, available: 0, rate: 0 });
+
+  useEffect(() => {
+    fetchTimetable();
+  }, []);
+
+  const fetchTimetable = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('timetable')
+        .select(`
+          *,
+          subjects (name),
+          rooms (name)
+        `);
+
+      if (error) throw error;
+      setTimetable(data || []);
+
+      // Calculate stats (simplified)
+      const totalSlots = timeSlots.length * days.length;
+      const occupied = data?.length || 0;
+      const available = totalSlots - occupied;
+      const rate = totalSlots > 0 ? Math.round((occupied / totalSlots) * 100) : 0;
+      
+      setStats({ occupied, available, rate });
+    } catch (error) {
+      console.error('Error fetching timetable:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const getClassForSlot = (day: string, time: string) => {
+    return timetable.find((item) => item.day_of_week === day && item.start_time === time);
+  };
+
+  const getSlotColor = (subjectName: string) => {
+    const colors: Record<string, string> = {
+      'Computer Science': '#4F9EFF',
+      'Mathematics': '#B8A3E8',
+      'Physics': '#34D399',
+      'English': '#FBBF24',
+      'Chemistry': '#F87171',
+      'Biology': '#4F9EFF',
+    };
+    return colors[subjectName] || '#6366f1';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6">
@@ -43,45 +98,45 @@ export default function Timetable() {
               </tr>
             </thead>
             <tbody>
-              {timeSlots.map((time, timeIdx) => (
+              {timeSlots.map((time) => (
                 <tr key={time} className="border-b border-white/5">
                   <td className="p-4 font-medium text-muted-foreground bg-white/3">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      {time}
+                      {formatTime(time)}
                     </div>
                   </td>
                   {days.map((day) => {
                     const classData = getClassForSlot(day, time);
+                    const color = classData ? getSlotColor(classData.subjects.name) : '';
                     return (
                       <td key={`${day}-${time}`} className="p-3">
                         {classData ? (
                           <div
                             className="p-4 rounded-xl border transition-all hover:scale-105 cursor-pointer relative overflow-hidden group"
                             style={{
-                              backgroundColor: `${classData.color}15`,
-                              borderColor: `${classData.color}40`,
+                              backgroundColor: `${color}15`,
+                              borderColor: `${color}40`,
                             }}
                           >
                             <div
                               className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
                               style={{
-                                background: `radial-gradient(circle at center, ${classData.color}30, transparent)`,
-                                animation: 'pulse 2s ease-in-out infinite',
+                                background: `radial-gradient(circle at center, ${color}30, transparent)`,
                               }}
                             />
                             <div className="relative z-10">
-                              <h4 className="font-semibold text-foreground text-sm mb-2">{classData.subject}</h4>
+                              <h4 className="font-semibold text-foreground text-sm mb-2">{classData.subjects.name}</h4>
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <MapPin className="w-3 h-3" />
-                                <span>{classData.room}</span>
+                                <span>{classData.rooms.name}</span>
                               </div>
                               <div className="mt-2 flex items-center gap-1">
                                 <div
                                   className="w-2 h-2 rounded-full animate-pulse"
-                                  style={{ backgroundColor: classData.color }}
+                                  style={{ backgroundColor: color }}
                                 />
-                                <span className="text-xs font-medium" style={{ color: classData.color }}>
+                                <span className="text-xs font-medium" style={{ color: color }}>
                                   Occupied
                                 </span>
                               </div>
@@ -109,8 +164,8 @@ export default function Timetable() {
               <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Occupied Rooms</p>
-              <p className="text-xl font-semibold text-foreground">24</p>
+              <p className="text-sm text-muted-foreground">Occupied Slots</p>
+              <p className="text-xl font-semibold text-foreground">{stats.occupied}</p>
             </div>
           </div>
         </div>
@@ -121,8 +176,8 @@ export default function Timetable() {
               <div className="w-3 h-3 rounded-full bg-chart-3" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Available Rooms</p>
-              <p className="text-xl font-semibold text-foreground">18</p>
+              <p className="text-sm text-muted-foreground">Available Slots</p>
+              <p className="text-xl font-semibold text-foreground">{stats.available}</p>
             </div>
           </div>
         </div>
@@ -134,7 +189,7 @@ export default function Timetable() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Utilization Rate</p>
-              <p className="text-xl font-semibold text-foreground">87%</p>
+              <p className="text-xl font-semibold text-foreground">{stats.rate}%</p>
             </div>
           </div>
         </div>
@@ -142,3 +197,4 @@ export default function Timetable() {
     </div>
   );
 }
+

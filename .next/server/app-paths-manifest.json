@@ -1,9 +1,6 @@
 {
   "/(auth)/page": "app/(auth)/page.js",
-  "/api/chat/route": "app/api/chat/route.js",
-  "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
   "/(main)/roster/page": "app/(main)/roster/page.js",
   "/(main)/timetable/page": "app/(main)/timetable/page.js",
-  "/(main)/staff/page": "app/(main)/staff/page.js",
-  "/(main)/analytics/page": "app/(main)/analytics/page.js"
+  "/(main)/dashboard/page": "app/(main)/dashboard/page.js"
 }

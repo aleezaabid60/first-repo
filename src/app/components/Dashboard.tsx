@@ -1,25 +1,93 @@
 'use client';
 
-import { Users, Calendar, CheckCircle, AlertCircle, TrendingUp, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Calendar, CheckCircle, AlertCircle, TrendingUp, Clock, Loader2 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
-
-const weeklyData = [
-  { day: 'Mon', attendance: 85, duties: 12 },
-  { day: 'Tue', attendance: 92, duties: 15 },
-  { day: 'Wed', attendance: 88, duties: 11 },
-  { day: 'Thu', attendance: 95, duties: 14 },
-  { day: 'Fri', attendance: 90, duties: 13 },
-  { day: 'Sat', attendance: 78, duties: 8 },
-];
-
-const heatmapData = [
-  { name: 'Dr. Sarah Khan', mon: 2, tue: 1, wed: 2, thu: 1, fri: 2, sat: 0 },
-  { name: 'Prof. Ahmed Ali', mon: 1, tue: 2, wed: 1, thu: 2, fri: 1, sat: 1 },
-  { name: 'Dr. Fatima Noor', mon: 2, tue: 1, wed: 2, thu: 1, fri: 2, sat: 0 },
-  { name: 'Ms. Ayesha Malik', mon: 1, tue: 2, wed: 1, thu: 1, fri: 1, sat: 1 },
-];
+import { supabase } from '@/lib/supabase';
+import { startOfWeek, endOfWeek, format, eachDayOfInterval, subDays, isSameDay } from 'date-fns';
 
 export default function Dashboard() {
+  const [stats, setStats] = useState({
+    staffCount: 0,
+    dutyCount: 0,
+    attendanceRate: '89%',
+    pendingLeaves: 0
+  });
+  const [weeklyDuties, setWeeklyDuties] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      // 1. Total Staff
+      const { count: staffCount } = await supabase
+        .from('teachers')
+        .select('*', { count: 'exact', head: true });
+
+      // 2. This Week Duties
+      const start = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const end = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      
+      const { count: dutyCount } = await supabase
+        .from('duties')
+        .select('*', { count: 'exact', head: true })
+        .gte('duty_date', start)
+        .lte('duty_date', end);
+
+      // 3. Pending Approvals
+      const { count: pendingLeaves } = await supabase
+        .from('leave_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      setStats({
+        staffCount: staffCount || 0,
+        dutyCount: dutyCount || 0,
+        attendanceRate: '89%', // Placeholder for now
+        pendingLeaves: pendingLeaves || 0
+      });
+
+      // 4. Weekly Distribution (Last 7 days)
+      const last7Days = eachDayOfInterval({
+        start: subDays(new Date(), 6),
+        end: new Date()
+      });
+
+      const { data: dutiesData } = await supabase
+        .from('duties')
+        .select('duty_date')
+        .gte('duty_date', format(last7Days[0], 'yyyy-MM-dd'));
+
+      const chartData = last7Days.map(day => {
+        const count = dutiesData?.filter(d => isSameDay(new Date(d.duty_date), day)).length || 0;
+        return {
+          day: format(day, 'EEE'),
+          duties: count,
+          attendance: 80 + Math.floor(Math.random() * 20) // Mock attendance trend
+        };
+      });
+
+      setWeeklyDuties(chartData);
+
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 space-y-6">
       <div>
@@ -31,7 +99,7 @@ export default function Dashboard() {
         <StatCard
           icon={Users}
           label="Active Staff"
-          value="47"
+          value={stats.staffCount.toString()}
           change="+3"
           trend="up"
           color="primary"
@@ -39,7 +107,7 @@ export default function Dashboard() {
         <StatCard
           icon={Calendar}
           label="This Week Duties"
-          value="73"
+          value={stats.dutyCount.toString()}
           change="+12"
           trend="up"
           color="secondary"
@@ -47,7 +115,7 @@ export default function Dashboard() {
         <StatCard
           icon={CheckCircle}
           label="Attendance Rate"
-          value="89%"
+          value={stats.attendanceRate}
           change="+5%"
           trend="up"
           color="chart-3"
@@ -55,7 +123,7 @@ export default function Dashboard() {
         <StatCard
           icon={AlertCircle}
           label="Pending Approvals"
-          value="8"
+          value={stats.pendingLeaves.toString()}
           change="-2"
           trend="down"
           color="chart-4"
@@ -75,7 +143,7 @@ export default function Dashboard() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={weeklyData}>
+            <AreaChart data={weeklyDuties}>
               <defs>
                 <linearGradient id="attendanceGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#4F9EFF" stopOpacity={0.4} />
@@ -107,7 +175,7 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground mt-1">Duties assigned per day</p>
           </div>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={weeklyData}>
+            <BarChart data={weeklyDuties}>
               <XAxis dataKey="day" stroke="#9CA3AF" style={{ fontSize: '12px' }} />
               <YAxis stroke="#9CA3AF" style={{ fontSize: '12px' }} />
               <Tooltip
@@ -121,39 +189,6 @@ export default function Dashboard() {
               <Bar dataKey="duties" fill="#B8A3E8" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border p-6 backdrop-blur-xl" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
-        <div className="mb-6">
-          <h3 className="font-semibold text-foreground">Staff Status Heatmap</h3>
-          <p className="text-sm text-muted-foreground mt-1">Duty load per staff member this week</p>
-        </div>
-        <div className="space-y-3">
-          {heatmapData.map((staff, idx) => (
-            <div key={idx} className="flex items-center gap-3">
-              <div className="w-40 text-sm text-foreground font-medium">{staff.name}</div>
-              <div className="flex-1 flex gap-2">
-                {['mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((day) => {
-                  const value = staff[day as keyof typeof staff] as number;
-                  const intensity = value === 0 ? 0 : value === 1 ? 0.4 : 0.8;
-                  return (
-                    <div
-                      key={day}
-                      className="flex-1 h-10 rounded-lg flex items-center justify-center text-xs font-medium transition-all hover:scale-105"
-                      style={{
-                        backgroundColor: `rgba(79, 158, 255, ${intensity})`,
-                        color: value === 0 ? '#9CA3AF' : '#FFFFFF',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                      }}
-                    >
-                      {value}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -205,3 +240,4 @@ function StatCard({ icon: Icon, label, value, change, trend, color }: StatCardPr
     </div>
   );
 }
+
