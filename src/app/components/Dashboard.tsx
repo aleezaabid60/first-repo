@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Users, Calendar, CheckCircle, AlertCircle, TrendingUp, Clock, Loader2 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { supabase } from '@/lib/supabase';
 import { startOfWeek, endOfWeek, format, eachDayOfInterval, subDays, isSameDay } from 'date-fns';
 
 export default function Dashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState({
     staffCount: 0,
     dutyCount: 0,
@@ -31,7 +33,7 @@ export default function Dashboard() {
       // 2. This Week Duties
       const start = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
       const end = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      
+
       const { count: dutyCount } = await supabase
         .from('duties')
         .select('*', { count: 'exact', head: true })
@@ -63,7 +65,7 @@ export default function Dashboard() {
         .gte('duty_date', format(last7Days[0], 'yyyy-MM-dd'));
 
       const chartData = last7Days.map(day => {
-        const count = dutiesData?.filter(d => isSameDay(new Date(d.duty_date), day)).length || 0;
+        const count = (dutiesData || []).filter((d: any) => isSameDay(new Date(d.duty_date), day)).length;
         return {
           day: format(day, 'EEE'),
           duties: count,
@@ -103,6 +105,7 @@ export default function Dashboard() {
           change="+3"
           trend="up"
           color="primary"
+          onClick={() => router.push('/staff?filter=active')}
         />
         <StatCard
           icon={Calendar}
@@ -111,6 +114,7 @@ export default function Dashboard() {
           change="+12"
           trend="up"
           color="secondary"
+          onClick={() => router.push('/roster')}
         />
         <StatCard
           icon={CheckCircle}
@@ -119,6 +123,7 @@ export default function Dashboard() {
           change="+5%"
           trend="up"
           color="chart-3"
+          onClick={() => router.push('/analytics')}
         />
         <StatCard
           icon={AlertCircle}
@@ -127,6 +132,7 @@ export default function Dashboard() {
           change="-2"
           trend="down"
           color="chart-4"
+          onClick={() => router.push('/staff?tab=leave')}
         />
       </div>
 
@@ -202,9 +208,10 @@ interface StatCardProps {
   change: string;
   trend: 'up' | 'down';
   color: string;
+  onClick?: () => void;
 }
 
-function StatCard({ icon: Icon, label, value, change, trend, color }: StatCardProps) {
+function StatCard({ icon: Icon, label, value, change, trend, color, onClick }: StatCardProps) {
   const colorMap: Record<string, string> = {
     primary: '#4F9EFF',
     secondary: '#B8A3E8',
@@ -216,6 +223,7 @@ function StatCard({ icon: Icon, label, value, change, trend, color }: StatCardPr
 
   return (
     <div
+      onClick={onClick}
       className="rounded-2xl border p-6 backdrop-blur-xl hover:scale-105 transition-all duration-300 cursor-pointer"
       style={{
         background: 'var(--glass-bg)',

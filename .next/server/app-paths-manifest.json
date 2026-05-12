@@ -1,6 +1,0 @@
-{
-  "/(auth)/page": "app/(auth)/page.js",
-  "/(main)/roster/page": "app/(main)/roster/page.js",
-  "/(main)/timetable/page": "app/(main)/timetable/page.js",
-  "/(main)/dashboard/page": "app/(main)/dashboard/page.js"
-}

@@ -76,10 +76,7 @@ export default function LoginScreen() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between ml-1">
-                <label className="text-sm font-medium text-foreground/90">Password</label>
-                <a href="#" className="text-xs text-primary hover:text-primary/80 transition-colors">Forgot password?</a>
-              </div>
+              <label className="text-sm font-medium text-foreground/90 ml-1">Password</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />

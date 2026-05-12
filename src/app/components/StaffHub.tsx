@@ -1,15 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, UserCheck, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Search, UserCheck, Clock, CheckCircle, XCircle, Loader2, Users, UserMinus, Filter } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { differenceInDays, format } from 'date-fns';
 
 export default function StaffHub() {
+  const searchParams = useSearchParams();
+  const initialFilter = searchParams.get('filter') || 'all';
+
   const [staff, setStaff] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [approvedLeavesToday, setApprovedLeavesToday] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState(initialFilter);
 
   useEffect(() => {
     fetchData();
@@ -41,8 +47,20 @@ export default function StaffHub() {
 
       if (leavesError) throw leavesError;
 
+      // Fetch approved leaves covering today
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const { data: approvedLeaves, error: approvedError } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('status', 'approved')
+        .lte('start_date', todayStr)
+        .gte('end_date', todayStr);
+
+      if (approvedError) throw approvedError;
+
       setStaff(staffData || []);
       setLeaveRequests(leavesData || []);
+      setApprovedLeavesToday(approvedLeaves || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -66,10 +84,25 @@ export default function StaffHub() {
     }
   };
 
-  const filteredStaff = staff.filter(s => 
-    `${s.first_name} ${s.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.department?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const onLeaveTeacherIds = new Set(approvedLeavesToday.map(l => l.teacher_id));
+
+  const filteredStaff = staff.filter(s => {
+    const matchesSearch = `${s.first_name} ${s.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          s.department?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const isOnLeave = onLeaveTeacherIds.has(s.id);
+    const matchesFilter = filter === 'all' || 
+                          (filter === 'active' && !isOnLeave) || 
+                          (filter === 'leave' && isOnLeave);
+    
+    return matchesSearch && matchesFilter;
+  });
+
+  const stats = {
+    total: staff.length,
+    onLeave: onLeaveTeacherIds.size,
+    active: staff.length - onLeaveTeacherIds.size
+  };
 
   if (loading) {
     return (
@@ -95,6 +128,57 @@ export default function StaffHub() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
           />
+        </div>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div 
+          onClick={() => setFilter('all')}
+          className={`rounded-2xl border p-5 backdrop-blur-xl cursor-pointer transition-all ${filter === 'all' ? 'border-primary shadow-[0_0_15px_rgba(79,158,255,0.3)]' : 'border-white/10 hover:border-primary/50'}`}
+          style={{ background: 'var(--glass-bg)' }}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-foreground">{stats.total}</p>
+              <p className="text-sm text-muted-foreground">Total Staff</p>
+            </div>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setFilter('active')}
+          className={`rounded-2xl border p-5 backdrop-blur-xl cursor-pointer transition-all ${filter === 'active' ? 'border-chart-3 shadow-[0_0_15px_rgba(52,211,153,0.3)]' : 'border-white/10 hover:border-chart-3/50'}`}
+          style={{ background: 'var(--glass-bg)' }}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-chart-3/20 flex items-center justify-center text-chart-3">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-foreground">{stats.active}</p>
+              <p className="text-sm text-muted-foreground">Active Today</p>
+            </div>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setFilter('leave')}
+          className={`rounded-2xl border p-5 backdrop-blur-xl cursor-pointer transition-all ${filter === 'leave' ? 'border-chart-5 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'border-white/10 hover:border-chart-5/50'}`}
+          style={{ background: 'var(--glass-bg)' }}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-chart-5/20 flex items-center justify-center text-chart-5">
+              <UserMinus className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-foreground">{stats.onLeave}</p>
+              <p className="text-sm text-muted-foreground">On Leave</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -127,10 +211,16 @@ export default function StaffHub() {
                         <p className="text-lg font-semibold text-foreground">{teacher.max_weekly_hours}</p>
                       </div>
                       <div>
-                        <span className="px-3 py-1.5 text-xs rounded-lg bg-chart-3/20 text-chart-3 font-medium flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-chart-3 animate-pulse" />
-                          Active
-                        </span>
+                        {onLeaveTeacherIds.has(teacher.id) ? (
+                          <span className="px-3 py-1.5 text-xs rounded-lg bg-chart-5/20 text-chart-5 font-medium flex items-center gap-1.5">
+                            On Leave
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1.5 text-xs rounded-lg bg-chart-3/20 text-chart-3 font-medium flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-chart-3 animate-pulse" />
+                            Active
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
