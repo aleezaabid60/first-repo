@@ -4,6 +4,7 @@ import "./../styles/index.css";
 import "./../styles/fonts.css";
 import "./../styles/tailwind.css";
 import "./../styles/theme.css";
+import { Toaster } from 'sonner';
 
 import Sidebar from "./components/Sidebar";
 import AIChatbot from "./components/AIChatbot";
@@ -29,6 +30,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <Toaster richColors position="top-center" />
         </ThemeProvider>
       </body>
     </html>

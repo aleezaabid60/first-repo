@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const SYSTEM_PROMPT = `You are "RWU Assistant", a state-of-the-art AI assistant integrated into the RWU Platform (Advanced Academic Management System). 
+const SYSTEM_PROMPT = `You are "RWU Assistant", the official AI assistant for the "AI Based Duty Scheduling and Timetable Management System". 
 
-Your intelligence and capabilities are on par with ChatGPT and MetaAI. You are professional, proactive, and deeply knowledgeable about the platform's structure.
+This project is an intelligent system developed by Aleeza Abid at Rawalpindi Women University. It automatically generates duty schedules and academic timetables using AI algorithms to reduce conflicts and improve efficiency.
+
+### PROJECT CONTEXT:
+- **Project Title**: AI Based Duty Scheduling and Timetable Management System
+- **Objective**: To automate timetable creation, minimize scheduling conflicts, optimize staff duties, and improve institutional efficiency.
+- **Key Features**: Automatic timetable generation, AI-based duty allocation, conflict detection, teacher workload management, and PDF exporting.
+- **University**: Rawalpindi Women University (RWU)
+- **Department**: Computer Science
 
 ### PLATFORM CONTEXT (Database Schema):
 You have access to the following data structures. Use this knowledge to answer queries accurately:
@@ -66,12 +73,6 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // Initialize the model with system instructions
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      systemInstruction: SYSTEM_PROMPT,
-    });
-
     // Find index of the first user message to ensure history starts with 'user'
     const firstUserIndex = messages.findIndex((m: any) => m.role === 'user');
     
@@ -85,23 +86,76 @@ export async function POST(req: Request) {
 
     const lastMessage = messages[messages.length - 1].content;
 
-    const chatSession = model.startChat({
-      history: history,
-      generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: 0.7,
-      },
-    });
+    try {
+      // Primary attempt using Gemini 2.5 Flash
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.5-flash",
+        systemInstruction: SYSTEM_PROMPT,
+      });
 
-    const result = await chatSession.sendMessage(lastMessage);
-    const response = await result.response;
-    const text = response.text();
+      const chatSession = model.startChat({
+        history: history,
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.7,
+        },
+      });
 
-    if (!text) {
-      throw new Error("No response text generated from Gemini API");
+      const result = await chatSession.sendMessage(lastMessage);
+      const response = await result.response;
+      const text = response.text();
+
+      if (!text) throw new Error("No response text generated");
+      return NextResponse.json({ text });
+
+    } catch (primaryError: any) {
+      console.log("Primary model (gemini-2.5-flash) failed, attempting fallback to gemini-2.5-pro...", primaryError.message);
+      
+      try {
+        const model = genAI.getGenerativeModel({ 
+          model: "gemini-2.5-pro",
+          systemInstruction: SYSTEM_PROMPT,
+        });
+
+        const chatSession = model.startChat({
+          history: history,
+          generationConfig: {
+            maxOutputTokens: 4096,
+            temperature: 0.7,
+          },
+        });
+
+        const result = await chatSession.sendMessage(lastMessage);
+        const response = await result.response;
+        const text = response.text();
+
+        if (!text) throw new Error("No response text generated");
+        return NextResponse.json({ text });
+
+      } catch (fallbackError: any) {
+        console.log("Fallback model (gemini-2.5-pro) failed, attempting fallback to gemini-2.0-flash...", fallbackError.message);
+        
+        const model = genAI.getGenerativeModel({ 
+          model: "gemini-2.0-flash",
+          systemInstruction: SYSTEM_PROMPT,
+        });
+
+        const chatSession = model.startChat({
+          history: history,
+          generationConfig: {
+            maxOutputTokens: 4096,
+            temperature: 0.7,
+          },
+        });
+
+        const result = await chatSession.sendMessage(lastMessage);
+        const response = await result.response;
+        const text = response.text();
+
+        if (!text) throw new Error("No response text generated");
+        return NextResponse.json({ text });
+      }
     }
-
-    return NextResponse.json({ text });
   } catch (error: any) {
     console.error("Detailed Gemini SDK Error:", error);
     

@@ -32,11 +32,12 @@ export default function Analytics() {
 
   const handleExportReport = async () => {
     setIsExporting(true);
+    let tempContainer: HTMLDivElement | null = null;
     try {
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).jsPDF;
       
-      const tempContainer = document.createElement('div');
+      tempContainer = document.createElement('div');
       tempContainer.style.position = 'absolute';
       tempContainer.style.left = '-9999px';
       tempContainer.style.top = '-9999px';
@@ -141,7 +142,7 @@ export default function Analytics() {
     } finally {
       setIsExporting(false);
       // Try to remove container safely
-      try { document.body.removeChild(tempContainer); } catch(e) {}
+      try { if (tempContainer) document.body.removeChild(tempContainer); } catch(e) {}
     }
   };
 

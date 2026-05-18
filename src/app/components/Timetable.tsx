@@ -1,20 +1,55 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, MapPin, Loader2 } from 'lucide-react';
+import { Clock, MapPin, Loader2, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-const timeSlots = ['08:00:00', '09:30:00', '11:00:00', '12:30:00', '14:00:00', '15:30:00'];
+const timeSlots = [
+  { id: 'Period 1', label: '08:00 - 09:30 AM' },
+  { id: 'Period 2', label: '09:30 - 11:00 AM' },
+  { id: 'Period 3', label: '11:00 - 12:30 PM' },
+  { id: 'Period 4', label: '01:00 - 02:30 PM' },
+];
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-// Helper to format time for display
-const formatTime = (time: string) => {
-  const [hours, minutes] = time.split(':');
-  const h = parseInt(hours);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const displayH = h % 12 || 12;
-  return `${displayH}:${minutes} ${ampm}`;
+// Mock timetable based on actual RWU Spring 2025 IT Dept data
+const MOCK_TIMETABLE = [
+  { id: '1', day_of_week: 'Monday', period: 'Period 1', subject: 'Prof. Practices', class_name: 'BSIT', room: '101', staff: { name: 'Mr. Hamza' } },
+  { id: '2', day_of_week: 'Monday', period: 'Period 1', subject: 'IT Infrastructure', class_name: 'BSCS', room: '301', staff: { name: 'Mr. Zeeshan' } },
+  { id: '3', day_of_week: 'Monday', period: 'Period 2', subject: 'OOP', class_name: 'BSIT', room: '103', staff: { name: 'Ms. Tabassum Kanwal' } },
+  { id: '4', day_of_week: 'Monday', period: 'Period 2', subject: 'Database', class_name: 'BSCS', room: '401', staff: { name: 'Dr. Adnan' } },
+  { id: '5', day_of_week: 'Monday', period: 'Period 3', subject: 'Intro to Mgt', class_name: 'BSIT', room: '201', staff: { name: 'Col. Batkhair' } },
+  { id: '6', day_of_week: 'Monday', period: 'Period 4', subject: 'Calculus', class_name: 'BSIT', room: '105', staff: { name: 'Dr. Hshmat' } },
+  { id: '7', day_of_week: 'Tuesday', period: 'Period 1', subject: 'Prof. Practices', class_name: 'BSIT', room: '102', staff: { name: 'Mr. Hamza' } },
+  { id: '8', day_of_week: 'Tuesday', period: 'Period 2', subject: 'Cybersecurity', class_name: 'BSCS', room: '302', staff: { name: 'Mr. Kamran' } },
+  { id: '9', day_of_week: 'Tuesday', period: 'Period 3', subject: 'Digital Logic', class_name: 'BSIT', room: '104', staff: { name: 'Mr. Umer Sultan' } },
+  { id: '10', day_of_week: 'Tuesday', period: 'Period 4', subject: 'Expository Writing', class_name: 'BSIT', room: '202', staff: { name: 'Ms. Ayesha Sarfraz' } },
+  { id: '11', day_of_week: 'Wednesday', period: 'Period 1', subject: 'Expository Writing', class_name: 'BSCS', room: '203', staff: { name: 'Ms. Mehwish' } },
+  { id: '12', day_of_week: 'Wednesday', period: 'Period 2', subject: 'OOP Lab', class_name: 'BSIT', room: 'Lab 1', staff: { name: 'Ms. Tabassum Kanwal' } },
+  { id: '13', day_of_week: 'Wednesday', period: 'Period 3', subject: 'Cloud Computing', class_name: 'BSCS', room: '303', staff: { name: 'Ms. Attia' } },
+  { id: '14', day_of_week: 'Wednesday', period: 'Period 4', subject: 'Discrete Structures', class_name: 'BSIT', room: '101', staff: { name: 'Ms. Tayyba' } },
+  { id: '15', day_of_week: 'Thursday', period: 'Period 1', subject: 'Network Security', class_name: 'BSCS', room: '304', staff: { name: 'Mr. Awais' } },
+  { id: '16', day_of_week: 'Thursday', period: 'Period 2', subject: 'AI', class_name: 'BSIT', room: '204', staff: { name: 'Mr. Umer Sultan' } },
+  { id: '17', day_of_week: 'Thursday', period: 'Period 3', subject: 'DLD Lab', class_name: 'BSIT', room: 'Lab 2', staff: { name: 'Mr. Umer Sultan' } },
+  { id: '18', day_of_week: 'Thursday', period: 'Period 4', subject: 'Discrete Structures', class_name: 'BSCS', room: '102', staff: { name: 'Mr. Ahsan' } },
+  { id: '19', day_of_week: 'Friday', period: 'Period 1', subject: 'Islamic Studies', class_name: 'BSIT', room: '106', staff: { name: 'Dr. Qurat ul Ain' } },
+  { id: '20', day_of_week: 'Friday', period: 'Period 2', subject: 'Entrepreneurship', class_name: 'BSCS', room: '205', staff: { name: 'Mr. Kashif' } },
+  { id: '21', day_of_week: 'Friday', period: 'Period 3', subject: 'Virtual Systems', class_name: 'BSCS', room: '305', staff: { name: 'Mr. Mujahid' } },
+];
+
+const subjectColors: Record<string, string> = {
+  'OOP': '#4F9EFF', 'OOP Lab': '#4F9EFF',
+  'Database': '#B8A3E8', 'Cybersecurity': '#B8A3E8', 'Network Security': '#B8A3E8',
+  'AI': '#34D399', 'Cloud Computing': '#34D399',
+  'Calculus': '#FBBF24', 'Discrete Structures': '#FBBF24',
+  'Digital Logic': '#F87171', 'DLD Lab': '#F87171',
+  'Prof. Practices': '#60A5FA', 'IT Infrastructure': '#60A5FA',
+  'Expository Writing': '#A78BFA', 'Islamic Studies': '#A78BFA',
+  'Entrepreneurship': '#FB923C', 'Virtual Systems': '#FB923C',
+  'Intro to Mgt': '#2DD4BF', 'Formal Methods': '#2DD4BF',
 };
+
+const getColor = (subject: string) => subjectColors[subject] || '#6366f1';
 
 export default function Timetable() {
   const [timetable, setTimetable] = useState<any[]>([]);
@@ -32,41 +67,32 @@ export default function Timetable() {
         .from('timetable')
         .select(`
           *,
-          subjects (name),
-          rooms (name)
+          staff (name)
         `);
 
-      if (error) throw error;
-      setTimetable(data || []);
-
-      // Calculate stats (simplified)
-      const totalSlots = timeSlots.length * days.length;
-      const occupied = data?.length || 0;
-      const available = totalSlots - occupied;
-      const rate = totalSlots > 0 ? Math.round((occupied / totalSlots) * 100) : 0;
-      
-      setStats({ occupied, available, rate });
+      if (error || !data || data.length === 0) {
+        // Use mock timetable if DB has no data or error
+        setTimetable(MOCK_TIMETABLE);
+        const totalSlots = timeSlots.length * days.length;
+        setStats({ occupied: MOCK_TIMETABLE.length, available: totalSlots - MOCK_TIMETABLE.length, rate: Math.round((MOCK_TIMETABLE.length / totalSlots) * 100) });
+      } else {
+        setTimetable(data);
+        const totalSlots = timeSlots.length * days.length;
+        const occupied = data.length;
+        setStats({ occupied, available: totalSlots - occupied, rate: Math.round((occupied / totalSlots) * 100) });
+      }
     } catch (error) {
       console.error('Error fetching timetable:', error);
+      setTimetable(MOCK_TIMETABLE);
+      const totalSlots = timeSlots.length * days.length;
+      setStats({ occupied: MOCK_TIMETABLE.length, available: totalSlots - MOCK_TIMETABLE.length, rate: Math.round((MOCK_TIMETABLE.length / totalSlots) * 100) });
     } finally {
       setLoading(false);
     }
   };
 
-  const getClassForSlot = (day: string, time: string) => {
-    return timetable.find((item) => item.day_of_week === day && item.start_time === time);
-  };
-
-  const getSlotColor = (subjectName: string) => {
-    const colors: Record<string, string> = {
-      'Computer Science': '#4F9EFF',
-      'Mathematics': '#B8A3E8',
-      'Physics': '#34D399',
-      'English': '#FBBF24',
-      'Chemistry': '#F87171',
-      'Biology': '#4F9EFF',
-    };
-    return colors[subjectName] || '#6366f1';
+  const getClassForSlot = (day: string, period: string) => {
+    return timetable.find((item) => item.day_of_week === day && item.period === period);
   };
 
   if (loading) {
@@ -98,22 +124,22 @@ export default function Timetable() {
               </tr>
             </thead>
             <tbody>
-              {timeSlots.map((time) => (
-                <tr key={time} className="border-b border-white/5">
-                  <td className="p-4 font-medium text-muted-foreground bg-white/3">
+              {timeSlots.map((slot) => (
+                <tr key={slot.id} className="border-b border-white/5">
+                  <td className="p-4 font-medium text-muted-foreground bg-white/3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      {formatTime(time)}
+                      {slot.label}
                     </div>
                   </td>
                   {days.map((day) => {
-                    const classData = getClassForSlot(day, time);
-                    const color = classData ? getSlotColor(classData.subjects.name) : '';
+                    const classData = getClassForSlot(day, slot.id);
+                    const color = classData ? getColor(classData.subject) : '';
                     return (
-                      <td key={`${day}-${time}`} className="p-3">
+                      <td key={`${day}-${slot.id}`} className="p-3 min-w-[140px]">
                         {classData ? (
                           <div
-                            className="p-4 rounded-xl border transition-all hover:scale-105 cursor-pointer relative overflow-hidden group"
+                            className="p-3 rounded-xl border transition-all hover:scale-105 cursor-pointer relative overflow-hidden group"
                             style={{
                               backgroundColor: `${color}15`,
                               borderColor: `${color}40`,
@@ -126,24 +152,28 @@ export default function Timetable() {
                               }}
                             />
                             <div className="relative z-10">
-                              <h4 className="font-semibold text-foreground text-sm mb-2">{classData.subjects.name}</h4>
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <MapPin className="w-3 h-3" />
-                                <span>{classData.rooms.name}</span>
+                              <h4 className="font-semibold text-foreground text-xs mb-1 leading-tight">{classData.subject}</h4>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                                <User className="w-3 h-3 flex-shrink-0" />
+                                <span className="truncate text-[10px]">{classData.staff?.name || '—'}</span>
                               </div>
-                              <div className="mt-2 flex items-center gap-1">
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <MapPin className="w-3 h-3 flex-shrink-0" />
+                                <span className="text-[10px]">Room {classData.room}</span>
+                              </div>
+                              <div className="mt-1.5 flex items-center gap-1">
                                 <div
-                                  className="w-2 h-2 rounded-full animate-pulse"
+                                  className="w-1.5 h-1.5 rounded-full animate-pulse"
                                   style={{ backgroundColor: color }}
                                 />
-                                <span className="text-xs font-medium" style={{ color: color }}>
+                                <span className="text-[10px] font-medium" style={{ color }}>
                                   Occupied
                                 </span>
                               </div>
                             </div>
                           </div>
                         ) : (
-                          <div className="p-4 rounded-xl border border-dashed border-white/10 bg-white/3 hover:bg-white/5 hover:border-primary/30 transition-all cursor-pointer">
+                          <div className="p-3 rounded-xl border border-dashed border-white/10 bg-white/3 hover:bg-white/5 hover:border-primary/30 transition-all cursor-pointer">
                             <p className="text-xs text-muted-foreground text-center">Available</p>
                           </div>
                         )}
