@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, MapPin, Loader2, User } from 'lucide-react';
+import { Clock, MapPin, Loader2, User, Sparkles, Plus, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 
 const timeSlots = [
   { id: 'Period 1', label: '08:00 - 09:30 AM' },
@@ -55,6 +59,48 @@ export default function Timetable() {
   const [timetable, setTimetable] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ occupied: 0, available: 0, rate: 0 });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
+  const [newEntry, setNewEntry] = useState({
+    day_of_week: 'Monday',
+    period: 'Period 1',
+    subject: '',
+    class_name: '',
+    room: '',
+    staff_name: ''
+  });
+
+  const handleGenerateAI = () => {
+    setIsGenerating(true);
+    setTimeout(() => {
+      // Simulate AI generating a new schedule
+      const shuffled = [...MOCK_TIMETABLE].sort(() => 0.5 - Math.random()).slice(0, 15);
+      setTimetable(shuffled);
+      const totalSlots = timeSlots.length * days.length;
+      setStats({ occupied: shuffled.length, available: totalSlots - shuffled.length, rate: Math.round((shuffled.length / totalSlots) * 100) });
+      setIsGenerating(false);
+    }, 1500);
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const entry = {
+      id: Date.now().toString(),
+      day_of_week: newEntry.day_of_week,
+      period: newEntry.period,
+      subject: newEntry.subject,
+      class_name: newEntry.class_name,
+      room: newEntry.room,
+      staff: { name: newEntry.staff_name }
+    };
+    
+    const updatedTimetable = [...timetable, entry];
+    setTimetable(updatedTimetable);
+    const totalSlots = timeSlots.length * days.length;
+    setStats({ occupied: updatedTimetable.length, available: totalSlots - updatedTimetable.length, rate: Math.round((updatedTimetable.length / totalSlots) * 100) });
+    setIsManualOpen(false);
+    setNewEntry({ day_of_week: 'Monday', period: 'Period 1', subject: '', class_name: '', room: '', staff_name: '' });
+  };
 
   useEffect(() => {
     fetchTimetable();
@@ -105,9 +151,28 @@ export default function Timetable() {
 
   return (
     <div className="p-8 space-y-6">
-      <div>
-        <h2 className="text-3xl font-semibold text-foreground mb-2">Timetable Matrix</h2>
-        <p className="text-muted-foreground">Weekly class schedule with room availability</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-3xl font-semibold text-foreground mb-2">Timetable Matrix</h2>
+          <p className="text-muted-foreground">Weekly class schedule with room availability</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={handleGenerateAI}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-medium shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all disabled:opacity-50"
+          >
+            {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+            {isGenerating ? 'Generating...' : 'Generate with AI'}
+          </button>
+          <button 
+            onClick={() => setIsManualOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-all font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Add Manual Entry
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl border backdrop-blur-xl overflow-hidden" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
@@ -224,6 +289,88 @@ export default function Timetable() {
           </div>
         </div>
       </div>
+
+      <Dialog open={isManualOpen} onOpenChange={setIsManualOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Manual Entry</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleManualSubmit} className="space-y-4 pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="day">Day</Label>
+                <select 
+                  id="day"
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={newEntry.day_of_week}
+                  onChange={(e) => setNewEntry({...newEntry, day_of_week: e.target.value})}
+                >
+                  {days.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="period">Period</Label>
+                <select 
+                  id="period"
+                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={newEntry.period}
+                  onChange={(e) => setNewEntry({...newEntry, period: e.target.value})}
+                >
+                  {timeSlots.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input 
+                id="subject" 
+                placeholder="e.g. Data Structures" 
+                value={newEntry.subject}
+                onChange={(e) => setNewEntry({...newEntry, subject: e.target.value})}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="class_name">Class Name</Label>
+                <Input 
+                  id="class_name" 
+                  placeholder="e.g. BSCS-3" 
+                  value={newEntry.class_name}
+                  onChange={(e) => setNewEntry({...newEntry, class_name: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="room">Room</Label>
+                <Input 
+                  id="room" 
+                  placeholder="e.g. 101" 
+                  value={newEntry.room}
+                  onChange={(e) => setNewEntry({...newEntry, room: e.target.value})}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="staff">Staff Name</Label>
+              <Input 
+                id="staff" 
+                placeholder="e.g. Dr. Ahmed" 
+                value={newEntry.staff_name}
+                onChange={(e) => setNewEntry({...newEntry, staff_name: e.target.value})}
+                required
+              />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsManualOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Entry</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -55,7 +55,8 @@ You have access to the following data structures. Use this knowledge to answer q
 - **Friday Period 2 (09:30 - 11:00)**: Mr. Kashif (Entrepreneurship, Room 205)
 - **Friday Period 3 (11:00 - 12:30)**: Mr Mujhaid (Virtual Systems, Room 305)
 
-- **Conciseness**: Be thorough but avoid unnecessary fluff.
+- **Conciseness & Efficiency**: Be extremely fast, optimistic, and highly efficient. Respond optimally like ChatGPT or Meta AI. Always provide clear, direct, and actionable answers without unnecessary fluff.
+- **Tone**: Maintain a highly positive, encouraging, and optimistic tone in all interactions.
 
 Always behave as if you are directly connected to the system's core. If you don't know something, offer to help find it or suggest the next logical step.`;
 
@@ -87,9 +88,9 @@ export async function POST(req: Request) {
     const lastMessage = messages[messages.length - 1].content;
 
     try {
-      // Primary attempt using Gemini 2.5 Flash
+      // Primary attempt using Gemini 1.5 Flash Latest
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash",
+        model: "gemini-1.5-flash-latest",
         systemInstruction: SYSTEM_PROMPT,
       });
 
@@ -109,16 +110,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ text });
 
     } catch (primaryError: any) {
-      console.log("Primary model (gemini-2.5-flash) failed, attempting fallback to gemini-2.5-pro...", primaryError.message);
+      console.log("Primary model (gemini-1.5-flash-latest) failed, attempting fallback to gemini-pro...", primaryError.message);
       
       try {
         const model = genAI.getGenerativeModel({ 
-          model: "gemini-2.5-pro",
-          systemInstruction: SYSTEM_PROMPT,
+          model: "gemini-pro",
+          // systemInstruction is not supported in the older gemini-pro, so we prepend it to the first message if needed, but the SDK ignores it or throws if we pass it to gemini-pro sometimes.
+          // It's safer to just omit systemInstruction for gemini-pro and handle it in the prompt.
         });
 
+        // For gemini-pro, we will manually inject the system prompt into the history to avoid validation errors
+        const fallbackHistory = [
+          { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
+          { role: 'model', parts: [{ text: "Understood. I am the RWU Assistant." }] },
+          ...history
+        ];
+
         const chatSession = model.startChat({
-          history: history,
+          history: fallbackHistory,
           generationConfig: {
             maxOutputTokens: 4096,
             temperature: 0.7,
@@ -133,28 +142,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ text });
 
       } catch (fallbackError: any) {
-        console.log("Fallback model (gemini-2.5-pro) failed, attempting fallback to gemini-2.0-flash...", fallbackError.message);
+        console.log("Fallback model (gemini-pro) failed...", fallbackError.message);
         
-        const model = genAI.getGenerativeModel({ 
-          model: "gemini-2.0-flash",
-          systemInstruction: SYSTEM_PROMPT,
-        });
-
-        const chatSession = model.startChat({
-          history: history,
-          generationConfig: {
-            maxOutputTokens: 4096,
-            temperature: 0.7,
-          },
-        });
-
-        const result = await chatSession.sendMessage(lastMessage);
-        const response = await result.response;
-        const text = response.text();
-
-        if (!text) throw new Error("No response text generated");
-        return NextResponse.json({ text });
+        throw new Error(`Google API Error: ${fallbackError.message || "Failed to generate response"}`);
       }
+
     }
   } catch (error: any) {
     console.error("Detailed Gemini SDK Error:", error);

@@ -1,9 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Sparkles, ChevronLeft, ChevronRight, Plus, Loader2, User } from 'lucide-react';
+import { Calendar as CalendarIcon, Sparkles, ChevronLeft, ChevronRight, Plus, Loader2, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, startOfWeek, addDays, isSameDay, getWeekOfMonth } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Calendar } from './ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 const MOCK_STAFF = [
   { id: '1', name: 'Mr. Hamza', role: 'Lecturer', department: 'Computer Science' },
@@ -21,6 +27,89 @@ export default function DutyRoster() {
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
+  const [newEntry, setNewEntry] = useState({
+    duty_date: new Date().toISOString(),
+    duty_type: '',
+    location: '',
+    staff_id: ''
+  });
+
+  const handleGenerateAI = async () => {
+    setIsGenerating(true);
+    try {
+      const newDuties: any[] = [];
+      const types = ['Invigilation', 'Lab Supervision', 'Campus Patrol', 'Library Duty'];
+      const locations = ['Room 101', 'Lab 1', 'Main Gate', 'Library'];
+      const weekDays = Array.from({ length: 6 }).map((_, i) => addDays(currentWeekStart, i));
+      
+      weekDays.forEach(day => {
+        const numDuties = Math.floor(Math.random() * 2) + 2;
+        for (let i = 0; i < numDuties; i++) {
+          const randomStaff = staff[Math.floor(Math.random() * staff.length)];
+          newDuties.push({
+            duty_date: day.toISOString(),
+            duty_type: types[Math.floor(Math.random() * types.length)],
+            location: locations[Math.floor(Math.random() * locations.length)],
+            staff_id: randomStaff.id
+          });
+        }
+      });
+
+      if (staff !== MOCK_STAFF) {
+        const { data, error } = await supabase.from('duties').insert(newDuties).select(`*, staff(name, role, department)`);
+        if (!error && data) {
+          setDuties([...duties, ...data]);
+        }
+      } else {
+        const mockDuties = newDuties.map(d => ({
+          ...d,
+          id: Date.now().toString() + Math.random(),
+          staff: { name: staff.find(s => s.id === d.staff_id)?.name }
+        }));
+        setDuties([...duties, ...mockDuties]);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const entry = {
+      duty_date: new Date(newEntry.duty_date).toISOString(),
+      duty_type: newEntry.duty_type,
+      location: newEntry.location,
+      staff_id: newEntry.staff_id
+    };
+    
+    if (staff !== MOCK_STAFF && entry.staff_id) {
+      const { data, error } = await supabase.from('duties').insert([{
+        ...entry
+      }]).select(`*, staff(name, role, department)`);
+      if (!error && data) {
+        setDuties([...duties, data[0]]);
+      }
+    } else {
+      const mockEntry = {
+        id: Date.now().toString(),
+        ...entry,
+        staff: { name: staff.find(s => s.id === entry.staff_id)?.name }
+      };
+      setDuties([...duties, mockEntry]);
+    }
+    
+    setIsManualOpen(false);
+    setNewEntry({
+      duty_date: currentWeekStart.toISOString(),
+      duty_type: '',
+      location: '',
+      staff_id: ''
+    });
+  };
 
   useEffect(() => {
     fetchData();
@@ -78,9 +167,13 @@ export default function DutyRoster() {
           <h2 className="text-3xl font-semibold text-foreground mb-2">AI Duty Roster Generator</h2>
           <p className="text-muted-foreground">Smart scheduling with conflict detection</p>
         </div>
-        <button className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-medium shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all">
-          <Sparkles className="w-5 h-5" />
-          Generate with AI
+        <button 
+          onClick={handleGenerateAI}
+          disabled={isGenerating}
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-secondary text-white rounded-xl font-medium shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all disabled:opacity-50"
+        >
+          {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+          {isGenerating ? 'Generating...' : 'Generate with AI'}
         </button>
       </div>
 
@@ -92,12 +185,27 @@ export default function DutyRoster() {
           >
             <ChevronLeft className="w-5 h-5 text-foreground" />
           </button>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10">
-            <Calendar className="w-4 h-4 text-primary" />
-            <span className="font-medium text-foreground">
-              {format(currentWeekStart, 'MMM d')} - {format(addDays(currentWeekStart, 5), 'MMM d, yyyy')}
-            </span>
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-left">
+                <CalendarIcon className="w-4 h-4 text-primary" />
+                <span className="font-medium text-foreground">
+                  Week {getWeekOfMonth(currentWeekStart)} - {format(currentWeekStart, 'MMMM yyyy')}
+                </span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <Calendar
+                mode="single"
+                selected={currentWeekStart}
+                onSelect={(date) => date && setCurrentWeekStart(startOfWeek(date, { weekStartsOn: 1 }))}
+                initialFocus
+                captionLayout="dropdown-buttons"
+                fromYear={2020}
+                toYear={2030}
+              />
+            </PopoverContent>
+          </Popover>
           <button 
             onClick={() => setCurrentWeekStart(addDays(currentWeekStart, 7))}
             className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
@@ -105,7 +213,10 @@ export default function DutyRoster() {
             <ChevronRight className="w-5 h-5 text-foreground" />
           </button>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-all">
+        <button 
+          onClick={() => setIsManualOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-all"
+        >
           <Plus className="w-4 h-4" />
           Add Manual Entry
         </button>
@@ -200,6 +311,72 @@ export default function DutyRoster() {
           </div>
         </div>
       </div>
+
+      <Dialog open={isManualOpen} onOpenChange={setIsManualOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Manual Entry</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleManualSubmit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="duty_date">Date</Label>
+              <select 
+                id="duty_date"
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={newEntry.duty_date}
+                onChange={(e) => setNewEntry({...newEntry, duty_date: e.target.value})}
+              >
+                {weekDays.map(d => (
+                  <option key={d.toISOString()} value={d.toISOString()}>
+                    {format(d, 'EEEE, MMM d, yyyy')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="duty_type">Duty Type</Label>
+              <Input 
+                id="duty_type" 
+                placeholder="e.g. Invigilation" 
+                value={newEntry.duty_type}
+                onChange={(e) => setNewEntry({...newEntry, duty_type: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input 
+                id="location" 
+                placeholder="e.g. Room 101" 
+                value={newEntry.location}
+                onChange={(e) => setNewEntry({...newEntry, location: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="staff_id">Staff Name</Label>
+              <select 
+                id="staff_id"
+                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={newEntry.staff_id}
+                onChange={(e) => setNewEntry({...newEntry, staff_id: e.target.value})}
+                required
+              >
+                <option value="" disabled>Select a staff member...</option>
+                {staff.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsManualOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Entry</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
