@@ -6,6 +6,7 @@ import { Search, UserCheck, Clock, CheckCircle, XCircle, Loader2, Users, UserMin
 import { supabase } from '@/lib/supabase';
 import { differenceInDays, format } from 'date-fns';
 
+
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -18,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './ui/dialog';
+import StaffDetailModal from './StaffDetailModal';
 
 
 const MOCK_LEAVE_REQUESTS = [
@@ -60,13 +62,13 @@ export default function StaffHub() {
   const searchParams = useSearchParams();
   const initialFilter = searchParams.get('filter') || 'all';
 
-  const [staff, setStaff] = useState<any[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
-  const [approvedLeavesToday, setApprovedLeavesToday] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [staff, setStaff] = useState<any[]>(MOCK_STAFF_DATA);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>(MOCK_LEAVE_REQUESTS);
+  const [approvedLeavesToday, setApprovedLeavesToday] = useState<any[]>([{ teacher_id: '3' }]);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState(initialFilter);
-  
+
   // Add Staff State
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,6 +78,10 @@ export default function StaffHub() {
     department: '',
     email: ''
   });
+
+
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -96,9 +102,11 @@ export default function StaffHub() {
         setStaff(staffData);
       }
 
+
+
       // Use mock leave requests
       setLeaveRequests(MOCK_LEAVE_REQUESTS);
-      
+
       // Optionally set mock approved leaves if we wanted
       setApprovedLeavesToday([{ teacher_id: staffData ? staffData[2]?.id : '3' }]);
     } catch (error) {
@@ -113,7 +121,7 @@ export default function StaffHub() {
     try {
       // Mock action since leave_requests table is not defined in schema
       setLeaveRequests((prev) => prev.filter((req) => req.id !== id));
-      
+
       // Optionally handle supabase if table exists later
       const { error } = await supabase
         .from('leave_requests')
@@ -150,7 +158,7 @@ export default function StaffHub() {
       // Reset form and close dialog
       setNewStaff({ name: '', role: '', department: '', email: '' });
       setIsAddStaffOpen(false);
-      
+
       // Refresh data
       fetchData();
     } catch (error) {
@@ -161,17 +169,19 @@ export default function StaffHub() {
     }
   };
 
+
+
   const onLeaveTeacherIds = new Set(approvedLeavesToday.map(l => l.teacher_id));
 
   const filteredStaff = staff.filter(s => {
     const matchesSearch = s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          s.department?.toLowerCase().includes(searchQuery.toLowerCase());
-    
+      s.department?.toLowerCase().includes(searchQuery.toLowerCase());
+
     const isOnLeave = onLeaveTeacherIds.has(s.id);
-    const matchesFilter = filter === 'all' || 
-                          (filter === 'active' && !isOnLeave) || 
-                          (filter === 'leave' && isOnLeave);
-    
+    const matchesFilter = filter === 'all' ||
+      (filter === 'active' && !isOnLeave) ||
+      (filter === 'leave' && isOnLeave);
+
     return matchesSearch && matchesFilter;
   });
 
@@ -181,13 +191,7 @@ export default function StaffHub() {
     active: staff.length - onLeaveTeacherIds.size
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-[400px] items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+
 
   return (
     <div className="p-8 space-y-6">
@@ -207,7 +211,7 @@ export default function StaffHub() {
               className="pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
             />
           </div>
-          
+
           <Dialog open={isAddStaffOpen} onOpenChange={setIsAddStaffOpen}>
             <DialogTrigger asChild>
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 rounded-xl h-[42px] px-4">
@@ -276,12 +280,13 @@ export default function StaffHub() {
               </form>
             </DialogContent>
           </Dialog>
+
         </div>
       </div>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left Column: Staff Directory */}
         <div className="lg:col-span-2 rounded-2xl border backdrop-blur-xl overflow-hidden flex flex-col" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)', maxHeight: '800px' }}>
           <div className="p-6 border-b border-white/10 flex justify-between items-center">
@@ -297,7 +302,11 @@ export default function StaffHub() {
               return (
                 <div
                   key={member.id}
-                  className="p-5 hover:bg-white/5 transition-all cursor-pointer"
+                  onClick={() => {
+                    setSelectedStaff(member);
+                    setIsDetailOpen(true);
+                  }}
+                  className="p-5 hover:bg-white/5 transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -332,7 +341,7 @@ export default function StaffHub() {
 
         {/* Right Column: Live Summary + Leave Approvals */}
         <div className="flex flex-col gap-6">
-          
+
           {/* Live Availability Summary */}
           <div className="rounded-2xl border backdrop-blur-xl overflow-hidden flex flex-col" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
             <div className="p-5 pb-2">
@@ -340,7 +349,7 @@ export default function StaffHub() {
               <p className="text-xs text-muted-foreground mb-4">Academic staff currently present for classes and duties</p>
 
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div 
+                <div
                   onClick={() => setFilter('active')}
                   className={`rounded-xl border p-3 cursor-pointer transition-all ${filter === 'active' ? 'border-chart-3 shadow-[0_0_15px_rgba(52,211,153,0.1)]' : 'border-white/10 hover:border-chart-3/50'}`}
                   style={{ background: 'rgba(52,211,153,0.08)' }}
@@ -348,7 +357,7 @@ export default function StaffHub() {
                   <p className="text-xs text-center font-medium text-chart-3/90 mb-1">Available</p>
                   <p className="text-3xl text-center font-bold text-chart-3">{stats.active}</p>
                 </div>
-                <div 
+                <div
                   onClick={() => setFilter('leave')}
                   className={`rounded-xl border p-3 cursor-pointer transition-all ${filter === 'leave' ? 'border-chart-4 shadow-[0_0_15px_rgba(250,204,21,0.1)]' : 'border-white/10 hover:border-chart-4/50'}`}
                   style={{ background: 'rgba(250,204,21,0.08)' }}
@@ -365,7 +374,11 @@ export default function StaffHub() {
                 return (
                   <div
                     key={member.id}
-                    className="px-3 py-2.5 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 transition-all flex items-center justify-between"
+                    onClick={() => {
+                      setSelectedStaff(member);
+                      setIsDetailOpen(true);
+                    }}
+                    className="px-3 py-2.5 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 hover:border-primary/30 transition-all flex items-center justify-between cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${isOnLeave ? 'bg-chart-4' : 'bg-chart-3'}`} />
@@ -388,60 +401,69 @@ export default function StaffHub() {
             </div>
           </div>
 
-        <div className="rounded-2xl border backdrop-blur-xl" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
-          <div className="p-6 border-b border-white/10">
-            <h3 className="font-semibold text-foreground">Leave Approvals</h3>
-            <p className="text-sm text-muted-foreground mt-1">Pending requests</p>
-          </div>
-          <div className="p-4 space-y-3">
-            {leaveRequests.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No pending requests</p>
-            ) : (
-              leaveRequests.map((request) => {
-                const days = differenceInDays(new Date(request.end_date), new Date(request.start_date)) + 1;
-                const teacherName = request.staff_name || 'Unknown Staff';
-                return (
-                  <div
-                    key={request.id}
-                    className="p-4 rounded-xl border border-white/10 bg-white/3 hover:border-primary/30 transition-all"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h4 className="font-medium text-foreground text-sm mb-1">{teacherName}</h4>
-                        <p className="text-xs text-muted-foreground">{request.type}</p>
+          <div className="rounded-2xl border backdrop-blur-xl" style={{ background: 'var(--glass-bg)', borderColor: 'var(--glass-border)' }}>
+            <div className="p-6 border-b border-white/10">
+              <h3 className="font-semibold text-foreground">Leave Approvals</h3>
+              <p className="text-sm text-muted-foreground mt-1">Pending requests</p>
+            </div>
+            <div className="p-4 space-y-3">
+              {leaveRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No pending requests</p>
+              ) : (
+                leaveRequests.map((request) => {
+                  const days = differenceInDays(new Date(request.end_date), new Date(request.start_date)) + 1;
+                  const teacherName = request.staff_name || 'Unknown Staff';
+                  return (
+                    <div
+                      key={request.id}
+                      className="p-4 rounded-xl border border-white/10 bg-white/3 hover:border-primary/30 transition-all"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="font-medium text-foreground text-sm mb-1">{teacherName}</h4>
+                          <p className="text-xs text-muted-foreground">{request.type}</p>
+                        </div>
+                        <span className="px-2 py-1 text-xs rounded-lg bg-chart-4/20 text-chart-4 font-medium">
+                          {days} days
+                        </span>
                       </div>
-                      <span className="px-2 py-1 text-xs rounded-lg bg-chart-4/20 text-chart-4 font-medium">
-                        {days} days
-                      </span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                        <Clock className="w-3 h-3" />
+                        <span>{format(new Date(request.start_date), 'MMM d')} - {format(new Date(request.end_date), 'MMM d')}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleLeaveAction(request.id, 'approved')}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-chart-3/20 text-chart-3 hover:bg-chart-3/30 transition-all"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="text-xs font-medium">Approve</span>
+                        </button>
+                        <button
+                          onClick={() => handleLeaveAction(request.id, 'rejected')}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-destructive/20 text-destructive hover:bg-destructive/30 transition-all"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span className="text-xs font-medium">Decline</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                      <Clock className="w-3 h-3" />
-                      <span>{format(new Date(request.start_date), 'MMM d')} - {format(new Date(request.end_date), 'MMM d')}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => handleLeaveAction(request.id, 'approved')}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-chart-3/20 text-chart-3 hover:bg-chart-3/30 transition-all"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        <span className="text-xs font-medium">Approve</span>
-                      </button>
-                      <button 
-                        onClick={() => handleLeaveAction(request.id, 'rejected')}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-destructive/20 text-destructive hover:bg-destructive/30 transition-all"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        <span className="text-xs font-medium">Decline</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
         </div>
       </div>
+
+      <StaffDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => {
+          setIsDetailOpen(false);
+          setSelectedStaff(null);
+        }}
+        staffMember={selectedStaff}
+      />
     </div>
   );
 }

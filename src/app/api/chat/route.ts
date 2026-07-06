@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { supabase } from "@/lib/supabase";
 
 const SYSTEM_PROMPT = `You are "RWU Assistant", the official AI assistant for the "AI Based Duty Scheduling and Timetable Management System". 
 
@@ -32,33 +33,79 @@ You have access to the following data structures. Use this knowledge to answer q
     - **Allocated Room Number**: [Room]
     - **Subject**: [Subject]
     - **Specific Instructions**: [Any extra details]
-- **Finding Replacements**: If a user asks for a replacement for a specific teacher, cross-reference their slot with the timetable below and find another teacher who is NOT teaching during that exact Period and Day. State the Room and Slot clearly.
+- **Finding Replacements**: If a user asks for a replacement for a specific teacher, cross-reference their slot with the timetable and find another teacher who is NOT teaching during that exact Period and Day. State the Room and Slot clearly.
 
-### ACTUAL TIMETABLE CONTEXT (Spring 2025 IT Dept):
-- **Monday Period 1 (08:00 - 09:30)**: Mr Hamza (Prof. Practices, Room 101), Mr Zeeshan (IT Infra, Room 301)
-- **Monday Period 2 (09:30 - 11:00)**: Ms Tabassum Kanwal (OOP, Room 103), Dr. adnan (Database, Room 401)
-- **Monday Period 3 (11:00 - 12:30)**: col batkhair (Intro to Mgt, Room 201)
-- **Monday Period 4 (01:00 - 02:30)**: Dr Hshmat (Calculus, Room 105)
-- **Tuesday Period 1 (08:00 - 09:30)**: Mr Hamza (Prof. Practices, Room 102), dr bilal (Formal Methods, Room 402)
-- **Tuesday Period 2 (09:30 - 11:00)**: kamran (Cybersecurity, Room 302)
-- **Tuesday Period 3 (11:00 - 12:30)**: Mr Umer sultan (Digital Logic, Room 104)
-- **Tuesday Period 4 (01:00 - 02:30)**: Ayesha Sarfraz (Expository Writing, Room 202)
-- **Wednesday Period 1 (08:00 - 09:30)**: Ms Mehwish (Expository Writing, Room 203), tariq (Entrepreneurship, Room 403)
-- **Wednesday Period 2 (09:30 - 11:00)**: Ms Tabassum Kanwal (OOP Lab, Lab 1)
-- **Wednesday Period 3 (11:00 - 12:30)**: Ms Attia (Cloud Computing, Room 303)
-- **Wednesday Period 4 (01:00 - 02:30)**: Ms Tayyba (Discrete Structures, Room 101)
-- **Thursday Period 1 (08:00 - 09:30)**: MR Awais (Network Security, Room 304)
-- **Thursday Period 2 (09:30 - 11:00)**: Mr Umer sultan (AI, Room 204), Dr. Ume Rubaca (Prof. Practices, Room 404)
-- **Thursday Period 3 (11:00 - 12:30)**: Mr Umer sultan (DLD Lab, Lab 2)
-- **Thursday Period 4 (01:00 - 02:30)**: Mr Ahsan (Discrete Structures, Room 102)
-- **Friday Period 1 (08:00 - 09:30)**: Dr Qurat ul Ain (Islamic Studies, Room 106)
-- **Friday Period 2 (09:30 - 11:00)**: Mr. Kashif (Entrepreneurship, Room 205)
-- **Friday Period 3 (11:00 - 12:30)**: Mr Mujhaid (Virtual Systems, Room 305)
-
+### CONCESSIVENESS & TONE:
 - **Conciseness & Efficiency**: Be extremely fast, optimistic, and highly efficient. Respond optimally like ChatGPT or Meta AI. Always provide clear, direct, and actionable answers without unnecessary fluff.
 - **Tone**: Maintain a highly positive, encouraging, and optimistic tone in all interactions.
 
 Always behave as if you are directly connected to the system's core. If you don't know something, offer to help find it or suggest the next logical step.`;
+
+async function getDatabaseContext() {
+  try {
+    const [staffRes, timetableRes, dutiesRes] = await Promise.all([
+      supabase.from("staff").select("*").limit(100),
+      supabase.from("timetable").select("*").limit(200),
+      supabase.from("duties").select("*").limit(100),
+    ]);
+
+    if (staffRes.error || timetableRes.error || dutiesRes.error) {
+      console.error("Supabase query error:", staffRes.error || timetableRes.error || dutiesRes.error);
+      return "";
+    }
+
+    const staffMap = new Map<string, any>();
+    staffRes.data?.forEach(s => staffMap.set(s.id, s));
+
+    let staffText = "No staff records found in the database.";
+    if (staffRes.data && staffRes.data.length > 0) {
+      staffText = staffRes.data.map(s => `- Name: ${s.name} | Role: ${s.role} | Department: ${s.department || "N/A"} | Email: ${s.email || "N/A"}`).join("\n");
+    }
+
+    let timetableText = "No timetable records found in the database.";
+    if (timetableRes.data && timetableRes.data.length > 0) {
+      const grouped: { [key: string]: string[] } = {};
+      timetableRes.data.forEach(t => {
+        const day = t.day_of_week;
+        if (!grouped[day]) grouped[day] = [];
+        const teacher = t.staff_id ? staffMap.get(t.staff_id) : null;
+        const teacherName = teacher ? teacher.name : "Unknown";
+        grouped[day].push(`  - Period: ${t.period} | Teacher: ${teacherName} | Subject: ${t.subject} | Room: ${t.room || "N/A"} | Class: ${t.class_name}`);
+      });
+
+      timetableText = Object.entries(grouped)
+        .map(([day, entries]) => `### ${day}\n${entries.join("\n")}`)
+        .join("\n\n");
+    }
+
+    let dutiesText = "No duties scheduled.";
+    if (dutiesRes.data && dutiesRes.data.length > 0) {
+      dutiesText = dutiesRes.data.map(d => {
+        const teacher = d.staff_id ? staffMap.get(d.staff_id) : null;
+        const teacherName = teacher ? teacher.name : "Unknown";
+        return `- Date: ${d.duty_date} | Teacher: ${teacherName} | Type: ${d.duty_type} | Location: ${d.location} | Status: ${d.status}`;
+      }).join("\n");
+    }
+
+    return `
+
+### ACTUAL DATABASE STATE (REAL-TIME DATA):
+Use this real-time database data to answer user queries, find replacements, check schedules, and manage staff:
+
+#### STAFF LIST:
+${staffText}
+
+#### TIMETABLE SCHEDULE:
+${timetableText}
+
+#### ACTIVE DUTIES:
+${dutiesText}
+`;
+  } catch (error) {
+    console.error("Failed to get database context:", error);
+    return "";
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -87,11 +134,15 @@ export async function POST(req: Request) {
 
     const lastMessage = messages[messages.length - 1].content;
 
+    // Fetch dynamic database context to keep chatbot updated
+    const dbContext = await getDatabaseContext();
+    const systemPromptWithContext = SYSTEM_PROMPT + dbContext;
+
     try {
-      // Primary attempt using Gemini 1.5 Flash Latest
+      // Primary attempt using Gemini 2.5 Flash (stable, fast, and supports system instruction)
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash-latest",
-        systemInstruction: SYSTEM_PROMPT,
+        model: "gemini-2.5-flash",
+        systemInstruction: systemPromptWithContext,
       });
 
       const chatSession = model.startChat({
@@ -110,24 +161,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ text });
 
     } catch (primaryError: any) {
-      console.log("Primary model (gemini-1.5-flash-latest) failed, attempting fallback to gemini-pro...", primaryError.message);
+      console.log("Primary model (gemini-2.5-flash) failed, attempting fallback to gemini-2.0-flash...", primaryError.message);
       
       try {
         const model = genAI.getGenerativeModel({ 
-          model: "gemini-pro",
-          // systemInstruction is not supported in the older gemini-pro, so we prepend it to the first message if needed, but the SDK ignores it or throws if we pass it to gemini-pro sometimes.
-          // It's safer to just omit systemInstruction for gemini-pro and handle it in the prompt.
+          model: "gemini-2.0-flash",
+          systemInstruction: systemPromptWithContext,
         });
 
-        // For gemini-pro, we will manually inject the system prompt into the history to avoid validation errors
-        const fallbackHistory = [
-          { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-          { role: 'model', parts: [{ text: "Understood. I am the RWU Assistant." }] },
-          ...history
-        ];
-
         const chatSession = model.startChat({
-          history: fallbackHistory,
+          history: history,
           generationConfig: {
             maxOutputTokens: 4096,
             temperature: 0.7,
@@ -142,16 +185,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ text });
 
       } catch (fallbackError: any) {
-        console.log("Fallback model (gemini-pro) failed...", fallbackError.message);
+        console.log("Fallback model (gemini-2.0-flash) failed...", fallbackError.message);
         
         throw new Error(`Google API Error: ${fallbackError.message || "Failed to generate response"}`);
       }
-
     }
   } catch (error: any) {
     console.error("Detailed Gemini SDK Error:", error);
     
-    // Handle specific Gemini error cases if possible
     let errorMessage = error.message || "Internal Server Error";
     if (errorMessage.includes("API key not valid")) {
       errorMessage = "Invalid Gemini API Key. Please check your .env.local file.";
@@ -162,3 +203,4 @@ export async function POST(req: Request) {
     }, { status: 500 });
   }
 }
+

@@ -9,14 +9,23 @@ import { startOfWeek, endOfWeek, format, eachDayOfInterval, subDays, isSameDay }
 
 export default function Dashboard() {
   const router = useRouter();
+  // Show instant demo data — update in background
   const [stats, setStats] = useState({
-    staffCount: 0,
-    dutyCount: 0,
+    staffCount: 47,
+    dutyCount: 140,
     attendanceRate: '89%',
-    pendingLeaves: 0
+    pendingLeaves: 5
   });
-  const [weeklyDuties, setWeeklyDuties] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [weeklyDuties, setWeeklyDuties] = useState<any[]>([
+    { day: 'Mon', duties: 12, attendance: 85 },
+    { day: 'Tue', duties: 18, attendance: 90 },
+    { day: 'Wed', duties: 15, attendance: 88 },
+    { day: 'Thu', duties: 20, attendance: 95 },
+    { day: 'Fri', duties: 10, attendance: 82 },
+    { day: 'Sat', duties: 8, attendance: 78 },
+    { day: 'Sun', duties: 5, attendance: 80 },
+  ]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -94,13 +103,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-[400px] items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+
 
   return (
     <div className="p-8 space-y-6">

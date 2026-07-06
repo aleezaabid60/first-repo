@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Calendar, Clock, Users, FileText, BarChart3, GraduationCap, LogOut } from 'lucide-react';
+import { LayoutDashboard, Calendar, Clock, Users, FileText, BarChart3, GraduationCap, LogOut, UserCheck, Bell } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export default function Sidebar() {
@@ -31,12 +31,15 @@ export default function Sidebar() {
     };
     getUser();
   }, []);
-  
+
   const menuItems = [
     { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'roster', href: '/roster', icon: Calendar, label: 'Duty Roster' },
     { id: 'timetable', href: '/timetable', icon: Clock, label: 'Timetable' },
     { id: 'staff', href: '/staff', icon: Users, label: 'Staff & Leave' },
+    { id: 'availability', href: '/availability', icon: UserCheck, label: 'Availability for Duty Roster' },
+    { id: 'notifications', href: '/notifications', icon: Bell, label: 'Notification & Reminder' },
+    { id: 'availability-timetable', href: '/availability-timetable', icon: UserCheck, label: 'Availability for Timetable' },
     { id: 'analytics', href: '/analytics', icon: BarChart3, label: 'Analytics' },
     { id: 'project', href: '/project', icon: FileText, label: 'Project Info' },
   ];
@@ -69,17 +72,16 @@ export default function Sidebar() {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.id === 'dashboard' && pathname === '/');
-          
+
           return (
             <Link
               key={item.id}
               href={item.href}
               prefetch={true}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                isActive
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive
+                ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                }`}
             >
               <Icon className="w-5 h-5" />
               <span className="font-medium">{item.label}</span>
@@ -100,8 +102,8 @@ export default function Sidebar() {
             </div>
           </div>
         </div>
-        
-        <button 
+
+        <button
           onClick={handleLogout}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 transition-all duration-200"
         >
